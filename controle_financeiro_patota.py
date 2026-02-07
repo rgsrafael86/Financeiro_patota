@@ -1,21 +1,18 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import plotly.graph_objects as go
 from datetime import datetime
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
+# --- 1. CONFIGURAÇÃO ---
 st.set_page_config(page_title="PATOTA AJAX BADENBALL", page_icon="⚽", layout="wide")
 
-# --- 2. ESTILOS CSS (Blindado) ---
+# --- 2. CSS "CYBERPUNK" ---
 st.markdown("""
     <style>
-    /* Fundo preto */
     .stApp { background-color: #000000; }
+    h1, h2, h3, h4, h5, p, span, div { font-family: 'Helvetica', sans-serif; color: #ffffff; }
     
-    /* Fontes */
-    h1, h2, h3, h4, h5, p, span { font-family: 'Helvetica', sans-serif; color: #ffffff; }
-    
-    /* Caixas dos KPIs (Placar) */
+    /* KPI CONTAINER */
     .kpi-container {
         background: linear-gradient(180deg, #1a1a1a 0%, #000000 100%);
         border: 1px solid #333;
@@ -29,7 +26,7 @@ st.markdown("""
     .kpi-label { color: #888; font-size: 14px; text-transform: uppercase; margin-bottom: 5px; }
     .kpi-value { color: #ffffff; font-weight: 900; font-size: 40px; }
 
-    /* Cards dos Jogadores */
+    /* CARDS */
     .player-card {
         background-color: #121212;
         border: 1px solid #8a2be2;
@@ -38,11 +35,8 @@ st.markdown("""
         margin-bottom: 10px;
         text-align: center;
     }
-    .player-name { color: #ffffff; font-weight: bold; font-size: 18px; }
-    .player-desc { color: #888; font-size: 12px; margin-bottom: 5px; }
-    .player-debt { color: #ff4444; font-weight: 900; font-size: 22px; }
+    .player-debt { color: #ff4444; font-weight: bold; font-size: 20px; }
 
-    /* Ajustes para Celular */
     @media (max-width: 768px) {
         .kpi-value { font-size: 50px !important; }
         .stImage { margin: 0 auto; }
@@ -50,7 +44,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- 3. FUNÇÕES DE DADOS ---
+# --- 3. DADOS ---
 def limpar_moeda(valor):
     if isinstance(valor, str):
         limpo = valor.replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
@@ -60,155 +54,143 @@ def limpar_moeda(valor):
 
 @st.cache_data(ttl=60)
 def carregar_dados():
-    # Links das planilhas
-    link_fluxo = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=1108345129&single=true&output=csv"
-    link_param = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=972176032&single=true&output=csv"
-    
+    url_fluxo = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=1108345129&single=true&output=csv"
+    url_param = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=972176032&single=true&output=csv"
     try:
-        df_fluxo = pd.read_csv(link_fluxo)
-        df_parametros = pd.read_csv(link_param)
-        
-        # Limpeza
-        if df_fluxo['Valor'].dtype == 'object':
-            df_fluxo['Valor'] = df_fluxo['Valor'].apply(limpar_moeda)
-        if df_parametros['Valor'].dtype == 'object':
-            df_parametros['Valor'] = df_parametros['Valor'].apply(limpar_moeda)
-            
-        return df_fluxo, df_parametros
-    except:
-        return None, None
+        df_f = pd.read_csv(url_fluxo)
+        df_p = pd.read_csv(url_param)
+        if df_f['Valor'].dtype == 'object': df_f['Valor'] = df_f['Valor'].apply(limpar_moeda)
+        if df_p['Valor'].dtype == 'object': df_p['Valor'] = df_p['Valor'].apply(limpar_moeda)
+        return df_f, df_p
+    except: return None, None
 
-# Carrega os dados
 df_fluxo, df_parametros = carregar_dados()
+if df_fluxo is None: st.stop()
 
-# Verifica se carregou
-if df_fluxo is None:
-    st.error("Erro ao carregar dados. Verifique a internet ou os links.")
-    st.stop()
+# --- 4. CÁLCULOS KPI ---
+df_pagos = df_fluxo[df_fluxo['Status'] == 'Pago'].copy()
+total_entradas = df_pagos[df_pagos['Tipo'] == 'Entrada']['Valor'].sum()
+total_saidas = df_pagos[df_pagos['Tipo'] == 'Saída']['Valor'].sum()
+saldo_atual = total_entradas - total_saidas
 
-# --- 4. CÁLCULOS ---
-saldo_atual = df_fluxo[df_fluxo['Status'] == 'Pago']['Valor'].sum()
 pendencias = df_fluxo[(df_fluxo['Status'] == 'Pendente') & (df_fluxo['Tipo'] == 'Entrada')]
 total_pendente = pendencias['Valor'].sum()
 
 try:
     meta_val = df_parametros[df_parametros['Parametro'] == 'Meta_Reserva']['Valor'].values[0]
     progresso_meta = min(int((saldo_atual / meta_val) * 100), 100)
-except:
-    meta_val = 800
-    progresso_meta = 0
+except: meta_val = 800; progresso_meta = 0
 
-# --- 5. CABEÇALHO (LOGO ESQUERDA) ---
-col_logo, col_texto = st.columns([1, 4])
+# --- 5. LÓGICA DO GRÁFICO DE EVOLUÇÃO ---
+# Prepara os dados para o gráfico de linha (Acumulado)
+df_evo = df_pagos.copy()
+# Transforma saídas em negativo para a soma funcionar
+df_evo['Valor_Real'] = df_evo.apply(lambda x: x['Valor'] if x['Tipo'] == 'Entrada' else -x['Valor'], axis=1)
 
-with col_logo:
+# Tenta converter Mes_Ref para data para ordenar corretamente (Jan, Fev, Mar...)
+meses_map = {
+    'Janeiro': 1, 'Fevereiro': 2, 'Março': 3, 'Abril': 4, 'Maio': 5, 'Junho': 6,
+    'Julho': 7, 'Agosto': 8, 'Setembro': 9, 'Outubro': 10, 'Novembro': 11, 'Dezembro': 12,
+    'Jan': 1, 'Fev': 2, 'Mar': 3, 'Abr': 4, 'Mai': 5, 'Jun': 6,
+    'Jul': 7, 'Ago': 8, 'Set': 9, 'Out': 10, 'Nov': 11, 'Dez': 12
+}
+
+def parse_month(mes_str):
+    # Tenta extrair o mês de strings como "Janeiro/2024" ou apenas "Janeiro"
     try:
-        st.image("logo.png", width=150)
-    except:
-        st.header("⚽")
+        parte_mes = mes_str.split('/')[0].strip()
+        return meses_map.get(parte_mes, 0)
+    except: return 0
 
-with col_texto:
-    # Usando HTML puro para garantir alinhamento
-    st.markdown("""
-    <div style="text-align: left; padding-top: 10px;">
-        <h1 style="margin:0; padding:0; font-size: 40px;">AJAX BADENBALL</h1>
+df_evo['Mes_Num'] = df_evo['Mes_Ref'].apply(parse_month)
+# Agrupa por mês
+df_grafico = df_evo.groupby(['Mes_Ref', 'Mes_Num'])['Valor_Real'].sum().reset_index()
+# Ordena cronologicamente
+df_grafico = df_grafico.sort_values('Mes_Num')
+
+# Calcula o Saldo Acumulado (Evolução)
+df_grafico['Saldo_Acumulado'] = df_grafico['Valor_Real'].cumsum()
+
+# --- 6. VISUALIZAÇÃO ---
+
+# Header
+col_logo, col_txt = st.columns([1, 4])
+with col_logo:
+    try: st.image("logo.png", width=150)
+    except: st.header("⚽")
+with col_txt:
+    st.markdown("""<div style="text-align: left; padding-top: 10px;">
+        <h1 style="margin:0;">AJAX BADENBALL</h1>
         <h5 style="color: #8a2be2; margin:0;">QUINTAS-FEIRAS | 18:30</h5>
-    </div>
-    """, unsafe_allow_html=True)
+    </div>""", unsafe_allow_html=True)
 
 st.markdown("---")
 
-# --- 6. PLACAR (KPIs) ---
+# Placar
 c1, c2, c3 = st.columns(3)
-
 with c1:
-    # HTML separado para evitar erros de sintaxe
-    html_c1 = f"""
-    <div class="kpi-container">
-        <div class="kpi-label">SALDO EM CAIXA</div>
-        <div class="kpi-value" style="color: #00d4ff;">R$ {saldo_atual:,.0f}</div>
-    </div>
-    """
-    st.markdown(html_c1, unsafe_allow_html=True)
-
+    st.markdown(f"""<div class="kpi-container"><div class="kpi-label">SALDO EM CAIXA</div><div class="kpi-value" style="color: #00d4ff;">R$ {saldo_atual:,.2f}</div></div>""", unsafe_allow_html=True)
 with c2:
-    html_c2 = f"""
-    <div class="kpi-container" style="border-top-color: #ff4444;">
-        <div class="kpi-label">TOTAL PENDENTE</div>
-        <div class="kpi-value" style="color: #ff4444;">R$ {total_pendente:,.0f}</div>
-    </div>
-    """
-    st.markdown(html_c2, unsafe_allow_html=True)
-
+    st.markdown(f"""<div class="kpi-container" style="border-top-color: #ff4444;"><div class="kpi-label">A RECEBER</div><div class="kpi-value" style="color: #ff4444;">R$ {total_pendente:,.2f}</div></div>""", unsafe_allow_html=True)
 with c3:
     cor = "#00ff00" if progresso_meta >= 100 else "#e0e0e0"
-    html_c3 = f"""
-    <div class="kpi-container" style="border-top-color: #8a2be2;">
-        <div class="kpi-label">META DA RESERVA</div>
-        <div class="kpi-value" style="color: {cor};">{progresso_meta}%</div>
-    </div>
-    """
-    st.markdown(html_c3, unsafe_allow_html=True)
+    st.markdown(f"""<div class="kpi-container" style="border-top-color: #8a2be2;"><div class="kpi-label">META RESERVA</div><div class="kpi-value" style="color: {cor};">{progresso_meta}%</div></div>""", unsafe_allow_html=True)
 
-# --- 7. MURAL DE PENDÊNCIAS ---
-st.markdown("<h3 style='color: #8a2be2;'>📋 PENDÊNCIAS</h3>", unsafe_allow_html=True)
-
+# Mural
+st.markdown("<h3 style='color: #8a2be2;'>📋 DEVEDORES</h3>", unsafe_allow_html=True)
 if not pendencias.empty:
     pendencias = pendencias.reset_index(drop=True)
     cols = st.columns(3)
-    
     for i, row in pendencias.iterrows():
-        # HTML seguro com aspas triplas
-        card_html = f"""
-        <div class="player-card">
-            <div class="player-name">{row['Nome']}</div>
-            <div class="player-desc">{row['Categoria']} • {row['Mes_Ref']}</div>
-            <div class="player-debt">R$ {row['Valor']:.0f}</div>
-        </div>
-        """
-        # Renderiza na coluna correta
         with cols[i % 3]:
-            st.markdown(card_html, unsafe_allow_html=True)
+            st.markdown(f"""<div class="player-card"><div style="color:white; font-weight:bold;">{row['Nome']}</div><div style="color:#888; font-size:12px;">{row['Categoria']} • {row['Mes_Ref']}</div><div class="player-debt">R$ {row['Valor']:.0f}</div></div>""", unsafe_allow_html=True)
 else:
     st.success("✅ Ninguém devendo!")
 
 st.markdown("---")
 
-# --- 8. GRÁFICOS ---
-g1, g2 = st.columns(2)
+# --- GRÁFICO DE LINHA (EVOLUÇÃO) ---
+st.markdown("### 📈 EVOLUÇÃO DO CAIXA (ÚLTIMOS MESES)")
 
-with g1:
-    st.markdown("#### RECEITA POR TIPO")
-    entradas = df_fluxo[df_fluxo['Tipo'] == 'Entrada']
-    if not entradas.empty:
-        fig = px.pie(
-            entradas, 
-            values='Valor', 
-            names='Categoria', 
-            hole=0.5,
-            color_discrete_sequence=['#00d4ff', '#8a2be2', '#ffffff']
-        )
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font_color="#fff"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+# Criação do Gráfico com Plotly Graph Objects (Mais flexível)
+fig = go.Figure()
 
-with g2:
-    st.markdown("#### CAIXA MENSAL")
-    df_mensal = df_fluxo.groupby('Mes_Ref')['Valor'].sum().reset_index()
-    if not df_mensal.empty:
-        fig = px.bar(df_mensal, x='Mes_Ref', y='Valor', text_auto=True)
-        # Atenção aqui: parênteses fechados corretamente
-        fig.update_traces(
-            marker_color='#8a2be2',
-            marker_line_color='#00d4ff',
-            marker_line_width=2
-        )
-        fig.update_layout(
-            paper_bgcolor='rgba(0,0,0,0)',
-            plot_bgcolor='rgba(0,0,0,0)',
-            font_color="#fff"
-        )
-        st.plotly_chart(fig, use_container_width=True)
+# 1. Linha do Saldo
+fig.add_trace(go.Scatter(
+    x=df_grafico['Mes_Ref'], 
+    y=df_grafico['Saldo_Acumulado'],
+    mode='lines+markers+text',
+    name='Saldo Atual',
+    line=dict(color='#00d4ff', width=4),
+    marker=dict(size=10, color='#00d4ff'),
+    text=df_grafico['Saldo_Acumulado'].apply(lambda x: f"R$ {x:.0f}"),
+    textposition="top center"
+))
+
+# 2. Linha da Meta (Tracejada)
+fig.add_trace(go.Scatter(
+    x=df_grafico['Mes_Ref'],
+    y=[meta_val] * len(df_grafico),
+    mode='lines',
+    name=f'Meta (R$ {meta_val})',
+    line=dict(color='#00ff00', width=2, dash='dash')
+))
+
+# Layout do Gráfico (Transparente e Estiloso)
+fig.update_layout(
+    paper_bgcolor='rgba(0,0,0,0)',
+    plot_bgcolor='rgba(0,0,0,0)',
+    font=dict(color='white'),
+    xaxis=dict(showgrid=False, linecolor='#333'),
+    yaxis=dict(showgrid=True, gridcolor='#333', zeroline=True, zerolinecolor='#666'),
+    legend=dict(orientation="h", y=1.1),
+    margin=dict(l=0, r=0, t=30, b=0),
+    height=400
+)
+
+st.plotly_chart(fig, use_container_width=True)
+
+# --- AUDITORIA ---
+st.markdown("---")
+with st.expander("🕵️‍♂️ VER DADOS BRUTOS"):
+    st.dataframe(df_fluxo, use_container_width=True)
