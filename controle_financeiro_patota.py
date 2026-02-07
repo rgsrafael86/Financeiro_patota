@@ -5,24 +5,37 @@ import plotly.express as px
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Finanças da Patota", page_icon="⚽", layout="wide")
 
-# --- CARREGAR DADOS ---
-@st.cache_data
+# --- CARREGAR DADOS DO GOOGLE SHEETS (EM TEMPO REAL) ---
+@st.cache_data(ttl=60) # Atualiza o cache a cada 60 segundos
 def carregar_dados():
-    arquivo = "Controle_Financeiro_Patota.xlsx"
+    # Links gerados pelo Rafael
+    url_fluxo = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=1108345129&single=true&output=csv"
+    url_parametros = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=972176032&single=true&output=csv"
+    url_jogadores = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=508755914&single=true&output=csv"
+    
     try:
-        # Lê as 3 abas essenciais
-        df_fluxo = pd.read_excel(arquivo, sheet_name="Fluxo_Caixa")
-        df_jogadores = pd.read_excel(arquivo, sheet_name="Base_Jogadores")
-        df_parametros = pd.read_excel(arquivo, sheet_name="Parametros")
+        # Lê os CSVs direto da nuvem
+        # decimal=',' e thousands='.' garantem que o Python entenda '1.200,50' se sua planilha estiver em PT-BR
+        df_fluxo = pd.read_csv(url_fluxo) 
+        df_jogadores = pd.read_csv(url_jogadores)
+        df_parametros = pd.read_csv(url_parametros)
+        
+        # Tratamento de erro caso venha texto na coluna de valor
+        if df_fluxo['Valor'].dtype == 'object':
+             df_fluxo['Valor'] = df_fluxo['Valor'].str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
+             
+        if df_parametros['Valor'].dtype == 'object':
+             df_parametros['Valor'] = df_parametros['Valor'].str.replace('.', '', regex=False).str.replace(',', '.', regex=False).astype(float)
+
         return df_fluxo, df_jogadores, df_parametros
-    except FileNotFoundError:
+    except Exception as e:
+        st.error(f"⚠️ Erro de Conexão com a Planilha: {e}")
         return None, None, None
 
 df_fluxo, df_jogadores, df_parametros = carregar_dados()
 
 # --- VERIFICAÇÃO DE SEGURANÇA ---
 if df_fluxo is None:
-    st.error("⚠️ Erro: Não encontrei o arquivo 'Controle_Financeiro_Patota.xlsx'. Verifique se ele foi enviado para o GitHub!")
     st.stop()
 
 # --- CÁLCULOS DO DT (Lógica de Negócio) ---
@@ -34,12 +47,16 @@ pendencias = df_fluxo[(df_fluxo['Status'] == 'Pendente') & (df_fluxo['Tipo'] == 
 total_pendente = pendencias['Valor'].sum()
 
 # 3. Meta da Reserva (Barra de Progresso)
-meta_reserva = df_parametros[df_parametros['Parametro'] == 'Meta_Reserva']['Valor'].values[0]
-progresso_meta = min(int((saldo_atual / meta_reserva) * 100), 100)
+try:
+    meta_reserva = df_parametros[df_parametros['Parametro'] == 'Meta_Reserva']['Valor'].values[0]
+    progresso_meta = min(int((saldo_atual / meta_reserva) * 100), 100)
+except:
+    meta_reserva = 800 # Valor padrão caso falhe a leitura
+    progresso_meta = 0
 
 # --- O SITE COMEÇA AQUI ---
 st.title("⚽ Painel Financeiro da Patota")
-st.markdown(f"**Atualizado em:** {pd.Timestamp.now().strftime('%d/%m/%Y')}")
+st.markdown(f"**Conectado ao Google Sheets 🟢** | Dados atualizados automaticamente.")
 
 # PLACAR GERAL (KPIs)
 col1, col2, col3 = st.columns(3)
@@ -59,23 +76,22 @@ st.subheader("📋 Mural da Transparência (Pendências)")
 if not pendencias.empty:
     st.warning(f"Total pendente: **R$ {total_pendente:,.2f}**")
     
-    # --- CÓDIGO BLINDADO (NOVO) ---
     # Define as colunas que queremos mostrar
     colunas_para_mostrar = ['Mes_Ref', 'Nome', 'Categoria', 'Valor']
     
-    # Só adiciona 'Obs' se ela realmente existir no Excel
+    # Só adiciona 'Obs' se ela realmente existir na planilha
     if 'Obs' in pendencias.columns:
         colunas_para_mostrar.append('Obs')
         
-    # Mostra a tabela sem erros
     st.dataframe(
         pendencias[colunas_para_mostrar],
         hide_index=True,
         use_container_width=True
     )
-    # -------------------------------
 else:
     st.success("✅ Ninguém devendo! O time está em dia.")
+
+st.divider()
 
 # --- ÁREA 2: GRÁFICOS ---
 col_graf1, col_graf2 = st.columns(2)
