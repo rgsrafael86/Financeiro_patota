@@ -58,16 +58,24 @@ st.subheader("📋 Mural da Transparência (Pendências)")
 
 if not pendencias.empty:
     st.warning(f"Total pendente: **R$ {total_pendente:,.2f}**")
-    # Mostra tabela limpa
+    
+    # --- CÓDIGO BLINDADO (NOVO) ---
+    # Define as colunas que queremos mostrar
+    colunas_para_mostrar = ['Mes_Ref', 'Nome', 'Categoria', 'Valor']
+    
+    # Só adiciona 'Obs' se ela realmente existir no Excel
+    if 'Obs' in pendencias.columns:
+        colunas_para_mostrar.append('Obs')
+        
+    # Mostra a tabela sem erros
     st.dataframe(
-        pendencias[['Mes_Ref', 'Nome', 'Categoria', 'Valor', 'Obs']],
+        pendencias[colunas_para_mostrar],
         hide_index=True,
         use_container_width=True
     )
+    # -------------------------------
 else:
     st.success("✅ Ninguém devendo! O time está em dia.")
-
-st.divider()
 
 # --- ÁREA 2: GRÁFICOS ---
 col_graf1, col_graf2 = st.columns(2)
