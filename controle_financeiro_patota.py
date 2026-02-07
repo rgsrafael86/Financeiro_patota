@@ -6,7 +6,7 @@ from datetime import datetime
 # --- 1. CONFIGURAÇÃO ---
 st.set_page_config(page_title="PATOTA AJAX BADENBALL", page_icon="⚽", layout="wide")
 
-# --- 2. CSS "CYBERPUNK" (Ajustado para Header Esquerdo) ---
+# --- 2. CSS "CYBERPUNK" (AJUSTADO E SEGURO) ---
 st.markdown("""
     <style>
     .stApp { background-color: #000000; }
@@ -42,7 +42,6 @@ st.markdown("""
     /* MOBILE ADJUSTMENTS */
     @media (max-width: 768px) {
         .kpi-value { font-size: 50px !important; }
-        /* No celular, centraliza o header para não ficar estranho */
         .header-text { text-align: center !important; }
         .stImage { margin: 0 auto; }
     }
@@ -64,8 +63,10 @@ def carregar_dados():
     try:
         df_fluxo = pd.read_csv(url_fluxo)
         df_parametros = pd.read_csv(url_parametros)
-        if df_fluxo['Valor'].dtype == 'object': df_fluxo['Valor'] = df_fluxo['Valor'].apply(limpar_moeda)
-        if df_parametros['Valor'].dtype == 'object': df_parametros['Valor'] = df_parametros['Valor'].apply(limpar_moeda)
+        if df_fluxo['Valor'].dtype == 'object': 
+            df_fluxo['Valor'] = df_fluxo['Valor'].apply(limpar_moeda)
+        if df_parametros['Valor'].dtype == 'object': 
+            df_parametros['Valor'] = df_parametros['Valor'].apply(limpar_moeda)
         return df_fluxo, df_parametros
     except: return None, None
 
@@ -79,61 +80,61 @@ total_pendente = pendencias['Valor'].sum()
 try:
     meta_reserva = df_parametros[df_parametros['Parametro'] == 'Meta_Reserva']['Valor'].values[0]
     progresso_meta = min(int((saldo_atual / meta_reserva) * 100), 100)
-except: meta_reserva = 800; progresso_meta = 0
+except: 
+    meta_reserva = 800
+    progresso_meta = 0
 
-# --- 4. HEADER NOVO (LOGO ESQUERDA + TEXTO DIREITA) ---
-# Cria duas colunas: Coluna 1 (Pequena) para logo, Coluna 2 (Grande) para texto
+# --- 4. HEADER (SEGURO CONTRA ERROS) ---
 col_logo, col_texto = st.columns([1, 4])
 
 with col_logo:
     try:
-        # width=150 garante que não fique gigante, mas visível à esquerda
         st.image("logo.png", width=150) 
     except:
         st.markdown("⚽")
 
 with col_texto:
-    # Título sempre visível agora, alinhado à esquerda
+    # Usando strings simples para evitar erro de sintaxe
     st.markdown("<h1 style='text-align: left; margin-bottom: 0px; margin-top: 10px;'>AJAX BADENBALL</h1>", unsafe_allow_html=True)
     st.markdown("<h5 style='text-align: left; color: #8a2be2; margin-top: 0px;'>QUINTAS-FEIRAS | 18:30</h5>", unsafe_allow_html=True)
 
 st.markdown("---")
 
-# --- 5. PLACAR ---
+# --- 5. PLACAR (HTML SEGURO COM ASPAS TRIPLAS) ---
 c1, c2, c3 = st.columns(3)
+
 with c1:
-    st.markdown(f"""<div class="kpi-container"><div class="kpi-label">SALDO EM CAIXA</div><div class="kpi-value" style="color: #00d4ff;">R$ {saldo_atual:,.0f}</div></div>""", unsafe_allow_html=True)
+    html_caixa = f"""
+    <div class="kpi-container">
+        <div class="kpi-label">SALDO EM CAIXA</div>
+        <div class="kpi-value" style="color: #00d4ff;">R$ {saldo_atual:,.0f}</div>
+    </div>
+    """
+    st.markdown(html_caixa, unsafe_allow_html=True)
+
 with c2:
-    st.markdown(f"""<div class="kpi-container" style="border-top-color: #ff4444;"><div class="kpi-label">TOTAL PENDENTE</div><div class="kpi-value" style="color: #ff4444;">R$ {total_pendente:,.0f}</div></div>""", unsafe_allow_html=True)
+    html_pendente = f"""
+    <div class="kpi-container" style="border-top-color: #ff4444;">
+        <div class="kpi-label">TOTAL PENDENTE</div>
+        <div class="kpi-value" style="color: #ff4444;">R$ {total_pendente:,.0f}</div>
+    </div>
+    """
+    st.markdown(html_pendente, unsafe_allow_html=True)
+
 with c3:
     cor_meta = "#00ff00" if progresso_meta >= 100 else "#e0e0e0"
-    st.markdown(f"""<div class="kpi-container" style="border-top-color: #8a2be2;"><div class="kpi-label">META DA RESERVA</div><div class="kpi-value" style="color: {cor_meta};">{progresso_meta}%</div></div>""", unsafe_allow_html=True)
+    html_meta = f"""
+    <div class="kpi-container" style="border-top-color: #8a2be2;">
+        <div class="kpi-label">META DA RESERVA</div>
+        <div class="kpi-value" style="color: {cor_meta};">{progresso_meta}%</div>
+    </div>
+    """
+    st.markdown(html_meta, unsafe_allow_html=True)
 
 # --- 6. MURAL ---
 st.markdown("<h3 style='color: #8a2be2 !important;'>📋 PENDÊNCIAS</h3>", unsafe_allow_html=True)
+
 if not pendencias.empty:
     pendencias = pendencias.reset_index(drop=True)
     cols = st.columns(3)
     for index, row in pendencias.iterrows():
-        with cols[index % 3]:
-            st.markdown(f"""<div class="player-card"><div class="player-name">{row['Nome']}</div><div class="player-desc">{row['Categoria']} • {row['Mes_Ref']}</div><div class="player-debt">R$ {row['Valor']:.0f}</div></div>""", unsafe_allow_html=True)
-else:
-    st.success("✅ Ninguém devendo!")
-
-st.markdown("---")
-
-# --- 7. GRÁFICOS ---
-g1, g2 = st.columns(2)
-with g1:
-    st.markdown("#### RECEITA POR TIPO")
-    entradas = df_fluxo[df_fluxo['Tipo'] == 'Entrada']
-    if not entradas.empty:
-        fig = px.pie(entradas, values='Valor', names='Categoria', hole=0.5, color_discrete_sequence=['#00d4ff', '#8a2be2', '#ffffff'])
-        fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color="#fff")
-        st.plotly_chart(fig, use_container_width=True)
-with g2:
-    st.markdown("#### CAIXA MENSAL")
-    df_mensal = df_fluxo.groupby('Mes_Ref')['Valor'].sum().reset_index()
-    if not df_mensal.empty:
-        fig = px.bar(df_mensal, x='Mes_Ref', y='Valor', text_auto=True)
-        fig.update_traces(marker_color='#8a2be2', marker_line_color
