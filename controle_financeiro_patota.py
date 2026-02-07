@@ -1,103 +1,83 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+from datetime import datetime
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Finanças da Patota", page_icon="⚽", layout="wide")
+st.set_page_config(page_title="AJAX BADENBALL", page_icon="⚽", layout="wide")
 
-# --- FUNÇÃO DE LIMPEZA DE MOEDA ---
+# --- CSS CUSTOMIZADO (CORES DO TIME) ---
+st.markdown("""
+    <style>
+    .stProgress > div > div > div > div { background-color: #FFD700; } /* Barra Amarela */
+    h1, h2, h3 { color: #D4001C; } /* Títulos Vermelhos */
+    .stMetric { background-color: #f0f2f6; padding: 10px; border-radius: 10px; border-left: 5px solid #D4001C; }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- FUNÇÃO DE LIMPEZA ---
 def limpar_moeda(valor):
     if isinstance(valor, str):
-        # Remove 'R$', espaços e pontos de milhar, troca vírgula por ponto
         limpo = valor.replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
-        try:
-            return float(limpo)
-        except:
-            return 0.0
+        try: return float(limpo)
+        except: return 0.0
     return valor
 
-# --- CARREGAR DADOS DO GOOGLE SHEETS (EM TEMPO REAL) ---
+# --- CARREGAR DADOS ---
 @st.cache_data(ttl=60)
 def carregar_dados():
-    # Seus Links
     url_fluxo = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=1108345129&single=true&output=csv"
     url_parametros = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=972176032&single=true&output=csv"
-    url_jogadores = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=508755914&single=true&output=csv"
     
     try:
         df_fluxo = pd.read_csv(url_fluxo)
-        df_jogadores = pd.read_csv(url_jogadores)
         df_parametros = pd.read_csv(url_parametros)
-        
-        # APLICA A LIMPEZA NO VALOR (A Mágica acontece aqui)
-        # Convertemos a coluna 'Valor' usando a função que remove o R$
-        if df_fluxo['Valor'].dtype == 'object':
-            df_fluxo['Valor'] = df_fluxo['Valor'].apply(limpar_moeda)
-             
-        if df_parametros['Valor'].dtype == 'object':
-            df_parametros['Valor'] = df_parametros['Valor'].apply(limpar_moeda)
+        if df_fluxo['Valor'].dtype == 'object': df_fluxo['Valor'] = df_fluxo['Valor'].apply(limpar_moeda)
+        if df_parametros['Valor'].dtype == 'object': df_parametros['Valor'] = df_parametros['Valor'].apply(limpar_moeda)
+        return df_fluxo, df_parametros
+    except: return None, None
 
-        return df_fluxo, df_jogadores, df_parametros
-    except Exception as e:
-        st.error(f"⚠️ Erro de Conexão com a Planilha: {e}")
-        return None, None, None
+df_fluxo, df_parametros = carregar_dados()
 
-df_fluxo, df_jogadores, df_parametros = carregar_dados()
-
-# --- VERIFICAÇÃO DE SEGURANÇA ---
-if df_fluxo is None:
-    st.stop()
-
-# --- CÁLCULOS DO DT ---
+# --- CÁLCULOS ---
 saldo_atual = df_fluxo[df_fluxo['Status'] == 'Pago']['Valor'].sum()
-
 pendencias = df_fluxo[(df_fluxo['Status'] == 'Pendente') & (df_fluxo['Tipo'] == 'Entrada')]
 total_pendente = pendencias['Valor'].sum()
+meta_reserva = df_parametros[df_parametros['Parametro'] == 'Meta_Reserva']['Valor'].values[0]
+progresso_meta = min(int((saldo_atual / meta_reserva) * 100), 100)
 
-try:
-    meta_reserva = df_parametros[df_parametros['Parametro'] == 'Meta_Reserva']['Valor'].values[0]
-    progresso_meta = min(int((saldo_atual / meta_reserva) * 100), 100)
-except:
-    meta_reserva = 800
-    progresso_meta = 0
+# --- CABEÇALHO ---
+col_logo, col_titulo = st.columns([1, 4])
+with col_logo:
+    try: st.image("logo.png", width=110) # Certifique-se de subir o arquivo 'logo.png' no GitHub
+    except: st.markdown("## 🍌")
+with col_titulo:
+    st.title("AJAX BADENBALL")
+    st.markdown(f"🗓️ **Temporada:** {datetime.now().year} | 📍 **Quintas 18:30**")
 
-# --- INTERFACE ---
-st.title("⚽ Painel Financeiro da Patota")
-st.markdown(f"**Conectado ao Google Sheets 🟢** | Dados atualizados automaticamente.")
-
-col1, col2, col3 = st.columns(3)
-col1.metric("💰 Saldo em Caixa", f"R$ {saldo_atual:,.2f}")
-col2.metric("⚠️ A Receber (Pendências)", f"R$ {total_pendente:,.2f}", delta_color="inverse")
-col3.metric("🎯 Meta Reserva", f"{progresso_meta}%")
+# PLACAR
+c1, c2, c3 = st.columns(3)
+c1.metric("💰 Caixa", f"R$ {saldo_atual:,.2f}")
+c2.metric("⚠️ Pendente", f"R$ {total_pendente:,.2f}")
+c3.metric("🎯 Meta", f"{progresso_meta}%")
 
 st.progress(progresso_meta / 100)
-st.caption(f"Meta: R$ {meta_reserva:,.2f} | Atual: R$ {saldo_atual:,.2f}")
 
-st.divider()
-
-st.subheader("📋 Mural da Transparência (Pendências)")
-
+# MURAL MOBILE-FRIENDLY
+st.subheader("📋 Mural da Transparência")
 if not pendencias.empty:
-    st.warning(f"Total pendente: **R$ {total_pendente:,.2f}**")
-    colunas_para_mostrar = ['Mes_Ref', 'Nome', 'Categoria', 'Valor']
-    if 'Obs' in pendencias.columns:
-        colunas_para_mostrar.append('Obs')
-    st.dataframe(pendencias[colunas_para_mostrar], hide_index=True, use_container_width=True)
+    for _, row in pendencias.iterrows():
+        with st.container(border=True):
+            col_a, col_b = st.columns([3, 1])
+            col_a.markdown(f"**{row['Nome']}**")
+            col_a.caption(f"{row['Mes_Ref']} • {row['Categoria']}")
+            col_b.markdown(f"**R$ {row['Valor']:.0f}**")
 else:
-    st.success("✅ Ninguém devendo!")
+    st.success("✅ Tudo em dia!")
 
-st.divider()
-
-col_graf1, col_graf2 = st.columns(2)
-with col_graf1:
-    st.subheader("📊 Origem do Dinheiro")
-    entradas = df_fluxo[df_fluxo['Tipo'] == 'Entrada']
-    if not entradas.empty:
-        fig_pizza = px.pie(entradas, values='Valor', names='Categoria', hole=0.4)
-        st.plotly_chart(fig_pizza, use_container_width=True)
-
-with col_graf2:
-    st.subheader("🗓️ Histórico Mensal")
-    fig_barras = px.bar(df_fluxo, x='Mes_Ref', y='Valor', color='Tipo', barmode='group',
-                        color_discrete_map={'Entrada': 'green', 'Saída': 'red'})
-    st.plotly_chart(fig_barras, use_container_width=True)
+# GRÁFICO DE RESULTADO
+st.subheader("📈 Resultado Líquido")
+df_mensal = df_fluxo.groupby('Mes_Ref')['Valor'].sum().reset_index()
+fig = px.bar(df_mensal, x='Mes_Ref', y='Valor', color='Valor', 
+             color_continuous_scale=['#D4001C', '#1C83E1'], text_auto=True)
+st.plotly_chart(fig, use_container_width=True)
