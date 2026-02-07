@@ -50,7 +50,7 @@ def limpar_moeda(valor):
         except: return 0.0
     return valor
 
-@st.cache_data(ttl=5) # Cache bem curto para atualizar rápido
+@st.cache_data(ttl=5)
 def carregar_dados():
     url_fluxo = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=1108345129&single=true&output=csv"
     url_param = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTp9Eoyr5oJkOhw-7GElhvo2p8h73J_kbsee2JjUDjPNO18Lv7pv5oU3w7SC9d_II2WVRB_E4TUd1XK/pub?gid=972176032&single=true&output=csv"
@@ -65,42 +65,27 @@ def carregar_dados():
 df_fluxo, df_parametros = carregar_dados()
 if df_fluxo is None: st.stop()
 
-# --- 4. LÓGICA BLINDADA DE CAIXA ---
-# Cria uma coluna "Valor_Real" que será usada para o cálculo
+# --- 4. CÁLCULOS ---
 def calcular_efeito_caixa(row):
-    # Se não está pago, não entra na conta do caixa (é zero)
-    if str(row['Status']).strip().lower() != 'pago':
-        return 0.0
-    
-    valor_absoluto = abs(float(row['Valor'])) # Garante que o número é positivo
+    if str(row['Status']).strip().lower() != 'pago': return 0.0
+    valor = abs(float(row['Valor']))
     tipo = str(row['Tipo']).strip().lower()
-    
-    # Se é Entrada, Soma. Se é Saída, Subtrai.
-    if 'entrada' in tipo:
-        return valor_absoluto
-    elif 'saída' in tipo or 'saida' in tipo:
-        return -valor_absoluto
-    else:
-        return 0.0
+    if 'entrada' in tipo: return valor
+    elif 'saída' in tipo or 'saida' in tipo: return -valor
+    else: return 0.0
 
-# Aplica a lógica linha por linha
 df_fluxo['Efeito_Caixa'] = df_fluxo.apply(calcular_efeito_caixa, axis=1)
-
-# O Saldo Atual é simplesmente a soma dessa coluna calculada
 saldo_atual = df_fluxo['Efeito_Caixa'].sum()
 
-# Pendências (Entradas Pendentes)
 pendencias = df_fluxo[(df_fluxo['Status'] == 'Pendente') & (df_fluxo['Tipo'] == 'Entrada')]
 total_pendente = pendencias['Valor'].sum()
 
-# Meta
 try:
     meta_val = df_parametros[df_parametros['Parametro'] == 'Meta_Reserva']['Valor'].values[0]
     progresso_meta = min(int((saldo_atual / meta_val) * 100), 100)
 except: meta_val = 800; progresso_meta = 0
 
-# --- 5. LÓGICA DO GRÁFICO (EVOLUÇÃO) ---
-# Ordenação de Meses
+# --- 5. GRÁFICO (PREPARAÇÃO) ---
 meses_ordem = {
     'Janeiro': 1, 'Fevereiro': 2, 'Março': 3, 'Abril': 4, 'Maio': 5, 'Junho': 6,
     'Julho': 7, 'Agosto': 8, 'Setembro': 9, 'Outubro': 10, 'Novembro': 11, 'Dezembro': 12,
@@ -111,16 +96,13 @@ def get_mes_num(m):
     try: return meses_ordem.get(m.split('/')[0].strip(), 0)
     except: return 0
 
-# Prepara dados do gráfico
-df_graf = df_fluxo[df_fluxo['Efeito_Caixa'] != 0].copy() # Só o que movimentou caixa
+df_graf = df_fluxo[df_fluxo['Efeito_Caixa'] != 0].copy()
 df_graf['Mes_Num'] = df_graf['Mes_Ref'].apply(get_mes_num)
 df_agrupado = df_graf.groupby(['Mes_Ref', 'Mes_Num'])['Efeito_Caixa'].sum().reset_index()
 df_agrupado = df_agrupado.sort_values('Mes_Num')
 df_agrupado['Saldo_Acumulado'] = df_agrupado['Efeito_Caixa'].cumsum()
 
 # --- 6. VISUALIZAÇÃO ---
-
-# Header
 col_logo, col_txt = st.columns([1, 4])
 with col_logo:
     try: st.image("logo.png", width=150)
@@ -132,7 +114,6 @@ with col_txt:
     </div>""", unsafe_allow_html=True)
 st.markdown("---")
 
-# Placar
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown(f"""<div class="kpi-container"><div class="kpi-label">SALDO EM CAIXA</div><div class="kpi-value" style="color: #00d4ff;">R$ {saldo_atual:,.2f}</div></div>""", unsafe_allow_html=True)
@@ -142,11 +123,10 @@ with c3:
     cor = "#00ff00" if progresso_meta >= 100 else "#e0e0e0"
     st.markdown(f"""<div class="kpi-container" style="border-top-color: #8a2be2;"><div class="kpi-label">META RESERVA</div><div class="kpi-value" style="color: {cor};">{progresso_meta}%</div></div>""", unsafe_allow_html=True)
 
-# Gráfico
-st.markdown("### 📈 EVOLUÇÃO DO CAIXA (ACUMULADO)")
+# Gráfico Estático
+st.markdown("### 📈 EVOLUÇÃO DO CAIXA")
 if not df_agrupado.empty:
     fig = go.Figure()
-    # Linha Saldo
     fig.add_trace(go.Scatter(
         x=df_agrupado['Mes_Ref'], y=df_agrupado['Saldo_Acumulado'],
         mode='lines+markers+text', name='Saldo',
@@ -155,7 +135,6 @@ if not df_agrupado.empty:
         text=df_agrupado['Saldo_Acumulado'].apply(lambda x: f"R$ {x:.0f}"),
         textposition="top center"
     ))
-    # Linha Meta
     fig.add_trace(go.Scatter(
         x=df_agrupado['Mes_Ref'], y=[meta_val]*len(df_agrupado),
         mode='lines', name='Meta',
@@ -165,15 +144,17 @@ if not df_agrupado.empty:
         paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
         font=dict(color='white'), height=350,
         margin=dict(l=0, r=0, t=20, b=0),
-        legend=dict(orientation="h", y=1.1)
+        legend=dict(orientation="h", y=1.1),
+        xaxis=dict(fixedrange=True), # Trava zoom X
+        yaxis=dict(fixedrange=True)  # Trava zoom Y
     )
-    st.plotly_chart(fig, use_container_width=True)
+    # CONFIGURAÇÃO DE GRÁFICO ESTÁTICO AQUI:
+    st.plotly_chart(fig, use_container_width=True, config={'staticPlot': True})
 else:
     st.info("Ainda não há pagamentos registrados para gerar o gráfico.")
 
 st.markdown("---")
 
-# Mural Devedores
 st.markdown("<h3 style='color: #8a2be2;'>📋 DEVEDORES</h3>", unsafe_allow_html=True)
 if not pendencias.empty:
     pendencias = pendencias.reset_index(drop=True)
@@ -184,20 +165,10 @@ if not pendencias.empty:
 else:
     st.success("✅ Ninguém devendo!")
 
-# --- 🔍 AUDITORIA DO CÁLCULO (AQUI VOCÊ VAI ACHAR O ERRO) ---
 st.markdown("---")
-with st.expander("🕵️‍♂️ AUDITORIA: VEJA COMO O CÁLCULO FOI FEITO"):
-    st.write("Esta tabela mostra exatamente o que o robô somou (positivo) ou subtraiu (negativo) do saldo.")
-    # Prepara tabela bonita para exibição
+with st.expander("🕵️‍♂️ AUDITORIA DOS CÁLCULOS"):
     df_audit = df_fluxo[['Mes_Ref', 'Nome', 'Tipo', 'Valor', 'Status', 'Efeito_Caixa']].copy()
-    
-    # Formatação condicional para visualização
     def highlight_vals(val):
         color = '#00ff00' if val > 0 else '#ff4444' if val < 0 else '#444'
         return f'color: {color}; font-weight: bold'
-    
-    st.dataframe(
-        df_audit.style.applymap(highlight_vals, subset=['Efeito_Caixa'])
-        .format({'Valor': 'R$ {:.2f}', 'Efeito_Caixa': 'R$ {:.2f}'}),
-        use_container_width=True
-    )
+    st.dataframe(df_audit.style.applymap(highlight_vals, subset=['Efeito_Caixa']).format({'Valor': 'R$ {:.2f}', 'Efeito_Caixa': 'R$ {:.2f}'}), use_container_width=True)
