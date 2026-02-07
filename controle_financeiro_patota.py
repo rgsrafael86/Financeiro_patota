@@ -155,7 +155,7 @@ else:
 
 st.markdown("---")
 
-st.markdown("<h3 style='color: #8a2be2;'>📋 MURAL DA TRANSPARÊNCIA</h3>", unsafe_allow_html=True)
+st.markdown("<h3 style='color: #8a2be2;'>📋 INADINPLENCIA</h3>", unsafe_allow_html=True)
 if not pendencias.empty:
     pendencias = pendencias.reset_index(drop=True)
     cols = st.columns(3)
