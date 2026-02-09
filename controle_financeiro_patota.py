@@ -6,6 +6,40 @@ import numpy as np
 # --- 1. CONFIGURAÇÃO ---
 st.set_page_config(page_title="PATOTA AJAX BADENBALL", page_icon="⚽", layout="wide")
 
+# --- INÍCIO DA TRAVA DE SEGURANÇA (Copie e cole logo após o st.set_page_config) ---
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+
+def check_password():
+    if st.session_state.logged_in:
+        return True
+
+    # Layout da Tela de Login
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        # Tenta carregar a logo conforme solicitado
+        try:
+            st.image("logo.png", use_container_width=True) 
+        except:
+            st.header("🔒 Acesso Restrito")
+            
+        st.write("### Área Exclusiva da Patota")
+        senha = st.text_input("Digite a senha de acesso:", type="password")
+        
+        if st.button("Acessar Sistema"):
+            # Verifica a senha que você configurou nos Secrets
+            if senha == st.secrets["senha_acesso"]:
+                st.session_state.logged_in = True
+                st.rerun()
+            else:
+                st.error("Senha incorreta! Tente novamente.")
+                
+    return False
+
+if not check_password():
+    st.stop()  # <--- ISSO É O QUE PROTEGE SEU CÓDIGO ORIGINAL
+# --- FIM DA TRAVA DE SEGURANÇA ---
+
 # --- 2. CSS ---
 st.markdown("""
     <style>
