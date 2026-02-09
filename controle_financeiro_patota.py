@@ -155,7 +155,7 @@ with c2:
     st.markdown(f"""<div class="kpi-container" style="border-top-color: #ff4444;"><div class="kpi-label">A RECEBER</div><div class="kpi-value" style="color: #ff4444;">R$ {total_pendente:,.2f}</div></div>""", unsafe_allow_html=True)
 with c3:
     cor = "#00ff00" if progresso_meta >= 100 else "#e0e0e0"
-    st.markdown(f"""<div class="kpi-container" style="border-top-color: #8a2be2;"><div class="kpi-label">META RESERVA</div><div class="kpi-value" style="color: {cor};">{progresso_meta}%</div></div>""", unsafe_allow_html=True)
+    st.markdown(f"""<div class="kpi-container" style="border-top-color: #8a2be2;"><div class="kpi-label">META RESERVA_ +/-1 MENSALIDADE E 1 BOLA</div><div class="kpi-value" style="color: {cor};">{progresso_meta}%</div></div>""", unsafe_allow_html=True)
 
 # Gráfico Estático
 st.markdown("### 📈 EVOLUÇÃO DO CAIXA")
