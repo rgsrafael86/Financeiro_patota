@@ -3,6 +3,22 @@ import pandas as pd
 import plotly.graph_objects as go
 import numpy as np
 
+# Injeção de CSS para ocultação de elementos da interface nativa
+st.markdown(
+    """
+    <style>
+    /* Oculta a barra de ferramentas (ícone do GitHub, Share, Star, Edit) */
+    [data-testid="stToolbar"] {
+        display: none;
+    }
+    
+    /* Opcional: Descomente a linha abaixo se quiser eliminar todo o cabeçalho superior */
+    /* header {visibility: hidden;} */
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # --- 1. CONFIGURAÇÃO ---
 st.set_page_config(page_title="PATOTA AJAX BADENBALL", page_icon="⚽", layout="wide")
 
