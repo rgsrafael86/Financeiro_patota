@@ -1,7 +1,6 @@
 name: Manter App da Patota Vivo
 on:
   schedule:
-    # Aciona 4 vezes ao dia em horários "quebrados" (ex: 03:17, 09:17, 15:17, 21:17 UTC)
     - cron: '17 3,9,15,21 * * *'
   workflow_dispatch:
 
@@ -11,13 +10,11 @@ jobs:
     steps:
       - name: Enviando Ping com Jitter Aleatório
         run: |
-          # 1. Gera um tempo de espera aleatório entre 0 e 1800 segundos (30 minutos)
           ATRASO=$((RANDOM % 1800))
           echo "Iniciando sleep de $ATRASO segundos para camuflar o disparo..."
           sleep $ATRASO
           
-          # 2. Executa o curl camuflado
+          # Executa o curl APENAS com a primeira requisição (Sem a flag -L)
           curl -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36" \
-          -L --max-redirs 3 \
           -s -o /dev/null -w "HTTP Status: %{http_code}\n" \
           https://patota.streamlit.app/
