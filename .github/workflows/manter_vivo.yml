@@ -1,10 +1,8 @@
 name: Manter App da Patota Vivo
-
 on:
   schedule:
-    # Roda a cada 20 minutos para evitar o sleep do Streamlit
     - cron: '*/20 * * * *'
-  workflow_dispatch: # Permite que você dê o "pontapé inicial" manual
+  workflow_dispatch:
 
 jobs:
   ping:
@@ -12,4 +10,4 @@ jobs:
     steps:
       - name: Enviando Ping para a Patota
         run: |
-          curl -I https://patota.streamlit.app/
+          curl -L -s -o /dev/null -w "HTTP Status: %{http_code}\n" https://patota.streamlit.app/_stcore/health
