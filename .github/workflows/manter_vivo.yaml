@@ -1,0 +1,64 @@
+name: Manter App da Patota Vivo
+on:
+  schedule:
+    - cron: '17 3,9,15,21 * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          
+      - name: Instalar Dependências
+        run: pip install requests
+
+      - name: Executar Ping via Python (Sessão Real)
+        run: |
+          python -c "
+          import requests
+          import time
+          import random
+          import sys
+          
+          # 1. Lógica de Jitter (Atraso Aleatório)
+          delay = random.randint(0, 1800)
+          print(f'Aguardando {delay} segundos para camuflagem WAF...')
+          time.sleep(delay)
+          
+          url_base = 'https://patota.streamlit.app/'
+          url_health = 'https://patota.streamlit.app/_stcore/health'
+          
+          # 2. Camuflagem de Cabeçalho (User-Agent)
+          headers = {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+              'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
+              'Connection': 'keep-alive'
+          }
+          
+          # 3. Execução com Retenção de Sessão
+          session = requests.Session()
+          try:
+              print('Acessando raiz para absorver cookies/WAF...')
+              response_base = session.get(url_base, headers=headers, timeout=30)
+              response_base.raise_for_status()
+              
+              print('Acessando rota interna do container Streamlit...')
+              response_health = session.get(url_health, headers=headers, timeout=30)
+              
+              # 4. Validação do Retorno
+              if response_health.status_code == 200 and 'ok' in response_health.text.lower():
+                  print('Status: ONLINE. Container ativado com sucesso.')
+                  sys.exit(0)
+              else:
+                  print(f'Falha: Resposta inesperada - HTTP {response_health.status_code} | Body: {response_health.text}')
+                  sys.exit(1)
+                  
+          except Exception as e:
+              print(f'Erro crítico de comunicação HTTP: {e}')
+              sys.exit(1)
+          "
