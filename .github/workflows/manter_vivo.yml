@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  ping:
+  ping-websocket:
     runs-on: ubuntu-latest
     steps:
       - name: Setup Python
@@ -13,52 +13,43 @@ jobs:
         with:
           python-version: '3.10'
           
-      - name: Instalar Dependências
-        run: pip install requests
+      - name: Instalar Dependências e Motor de Renderização (Playwright)
+        run: |
+          pip install playwright
+          playwright install --with-deps chromium
 
-      - name: Executar Ping via Python (Sessão Real)
+      - name: Executar Simulação de Usuário (Headless Browser)
         run: |
           python -c "
-          import requests
+          from playwright.sync_api import sync_playwright
           import time
           import random
           import sys
           
-          # 1. Lógica de Jitter (Atraso Aleatório)
+          # 1. Jitter para camuflagem de WAF
           delay = random.randint(0, 1800)
-          print(f'Aguardando {delay} segundos para camuflagem WAF...')
+          print(f'Aguardando {delay} segundos (Jitter)...')
           time.sleep(delay)
           
-          url_base = 'https://patota.streamlit.app/'
-          url_health = 'https://patota.streamlit.app/_stcore/health'
-          
-          # 2. Camuflagem de Cabeçalho (User-Agent)
-          headers = {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-              'Accept-Language': 'pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7',
-              'Connection': 'keep-alive'
-          }
-          
-          # 3. Execução com Retenção de Sessão
-          session = requests.Session()
+          # 2. Inicialização do Navegador Virtual
           try:
-              print('Acessando raiz para absorver cookies/WAF...')
-              response_base = session.get(url_base, headers=headers, timeout=30)
-              response_base.raise_for_status()
-              
-              print('Acessando rota interna do container Streamlit...')
-              response_health = session.get(url_health, headers=headers, timeout=30)
-              
-              # 4. Validação do Retorno
-              if response_health.status_code == 200 and 'ok' in response_health.text.lower():
-                  print('Status: ONLINE. Container ativado com sucesso.')
+              with sync_playwright() as p:
+                  browser = p.chromium.launch(headless=True)
+                  page = browser.new_page()
+                  
+                  print('Acessando a aplicação e aguardando renderização do DOM...')
+                  # wait_until='networkidle' garante que o JavaScript foi processado e o WebSocket abriu
+                  page.goto('https://patota.streamlit.app/', wait_until='networkidle', timeout=60000)
+                  
+                  # 3. Sustentação da Conexão
+                  print('DOM carregado. Mantendo o WebSocket aberto por 15 segundos para registro na nuvem...')
+                  time.sleep(15)
+                  
+                  print('Status: ONLINE. Interação via WebSocket validada com sucesso.')
+                  browser.close()
                   sys.exit(0)
-              else:
-                  print(f'Falha: Resposta inesperada - HTTP {response_health.status_code} | Body: {response_health.text}')
-                  sys.exit(1)
                   
           except Exception as e:
-              print(f'Erro crítico de comunicação HTTP: {e}')
+              print(f'Falha crítica na renderização ou tempo limite excedido: {e}')
               sys.exit(1)
           "
