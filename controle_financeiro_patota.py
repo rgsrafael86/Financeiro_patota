@@ -217,7 +217,7 @@ else:
 
 st.markdown("---")
 with st.expander("🕵️‍♂️ AUDITORIA DOS CÁLCULOS"):
-    df_audit = df_fluxo[['Mes_Ref', 'Nome', 'Tipo', 'Valor', 'Status', 'Efeito_Caixa']].copy()
+   df_audit = df_fluxo[['Mes_Ref', 'Nome', 'Tipo', 'Valor', 'Status', 'Efeito_Caixa']].copy().iloc[::-1]
     def highlight_vals(val):
         color = '#ccff33' if val > 0 else '#ff4444' if val < 0 else '#444'
         return f'color: {color}; font-weight: bold'
